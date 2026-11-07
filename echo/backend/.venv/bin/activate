@@ -35,7 +35,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV=/Users/ramgadade/Desktop/wecode/echo/backend/.venv
+VIRTUAL_ENV=/Users/ramgadade/Desktop/ECHO/echo/backend/.venv
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

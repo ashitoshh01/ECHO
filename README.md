@@ -26,13 +26,14 @@ uvicorn main:app --reload --port 8000
 - **API Docs / Swagger:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **API Health:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
 
-### 2. Frontend (React + Tailwind)
+### 2. Frontend (React 19 + Vite + Tailwind CSS + Lucide)
 ```bash
 cd echo/frontend
-python3 -m http.server 3000
+npm install
+npm run dev
 ```
 - **Frontend UI:** [http://localhost:3000](http://localhost:3000)  
-  *(Note: You can also open [http://localhost:8000](http://localhost:8000) directly as the backend serves the frontend as well).*
+  *(Note: You can also build via `npm run build` or open [http://localhost:8000](http://localhost:8000) directly as the backend serves the built frontend).*
 
 ---
 
