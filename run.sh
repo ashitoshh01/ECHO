@@ -33,7 +33,7 @@ echo "Starting Frontend on http://localhost:3000 ..."
 trap 'kill $(jobs -p) 2>/dev/null' EXIT
 
 # Start backend
-(cd echo/backend && .venv/bin/uvicorn main:app --port 8000) &
+(cd echo/backend && .venv/bin/uvicorn main:app --reload --port 8000) &
 
 # Start frontend (Vite dev server with hot-reload and API proxy)
 if command -v npm >/dev/null 2>&1 && [ -f "echo/frontend/package.json" ]; then

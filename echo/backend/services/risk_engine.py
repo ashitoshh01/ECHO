@@ -13,6 +13,17 @@ def recency_weight(days: int) -> float:
     return 0.15
 
 def calculate_project_risk(project_id: str):
+    if not project_id:
+        return {
+            "leaver": None,
+            "artifacts": [],
+            "high_risk_count": 0,
+            "bus_factor_violations": [],
+            "gaps_detected": [],
+            "gaps_planted": [],
+            "formula": "Risk = OwnershipConcentration x Criticality x (1 - DocCoverage) x RecencyWeight",
+        }
+
     conn = get_db()
     
     # 1. Get leaver
@@ -28,8 +39,8 @@ def calculate_project_risk(project_id: str):
             (project_id,)
         ).fetchone()
 
-    leaver = dict(leaver_row) if leaver_row else {"id": "unknown", "name": "Team Member", "role": "Engineer"}
-    leaver_id = leaver["id"]
+    leaver = dict(leaver_row) if leaver_row else None
+    leaver_id = leaver["id"] if leaver else None
 
     # 2. Get artifacts
     art_rows = conn.execute(

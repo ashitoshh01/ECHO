@@ -1,7 +1,8 @@
 """
 Echo Knowledge-Risk Engine — SQLite Database Layer
 Persistent storage for projects, repositories, artifacts, team members,
-risk assessments, interview answers, decisions, handovers, and chats.
+risk assessments, interview answers, decisions, handovers, chats,
+GitHub credentials, commits, and asynchronous ingestion jobs.
 """
 
 import os
@@ -38,6 +39,13 @@ def init_db():
             source_type TEXT DEFAULT 'git', -- 'git', 'github', 'demo'
             status TEXT DEFAULT 'synced',
             last_synced_at TEXT,
+            owner TEXT,
+            repo_id_github INTEGER,
+            default_branch TEXT,
+            description TEXT,
+            is_private INTEGER DEFAULT 0,
+            html_url TEXT,
+            size_kb INTEGER DEFAULT 0,
             FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
         );
 
@@ -192,7 +200,64 @@ def init_db():
             details TEXT,
             last_sync_at TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS github_credentials (
+            id TEXT PRIMARY KEY DEFAULT 'default',
+            auth_type TEXT NOT NULL, -- 'pat', 'oauth', 'app'
+            token TEXT NOT NULL,
+            username TEXT,
+            name TEXT,
+            avatar_url TEXT,
+            scopes TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS ingestion_jobs (
+            id TEXT PRIMARY KEY,
+            project_id TEXT,
+            repo_owner TEXT,
+            repo_name TEXT,
+            branch TEXT,
+            status TEXT NOT NULL, -- 'queued', 'cloning', 'analyzing', 'completed', 'failed'
+            step TEXT,
+            progress INTEGER DEFAULT 0,
+            artifacts_count INTEGER DEFAULT 0,
+            authors_count INTEGER DEFAULT 0,
+            error_message TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT,
+            completed_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS commits (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            repo_id TEXT NOT NULL,
+            author_name TEXT NOT NULL,
+            author_email TEXT,
+            committed_at TEXT NOT NULL,
+            message TEXT,
+            files_changed_count INTEGER DEFAULT 0,
+            FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
         """)
+
+        # Migration: ensure newly added columns exist in older SQLite databases
+        repo_cols = [r["name"] for r in conn.execute("PRAGMA table_info(repositories)").fetchall()]
+        needed_repo_cols = {
+            "owner": "TEXT",
+            "repo_id_github": "INTEGER",
+            "default_branch": "TEXT",
+            "description": "TEXT",
+            "is_private": "INTEGER DEFAULT 0",
+            "html_url": "TEXT",
+            "size_kb": "INTEGER DEFAULT 0"
+        }
+        for col, col_type in needed_repo_cols.items():
+            if col not in repo_cols:
+                conn.execute(f"ALTER TABLE repositories ADD COLUMN {col} {col_type};")
+
     conn.close()
 
 def get_active_project():
@@ -203,3 +268,50 @@ def get_active_project():
     conn.close()
     return dict(row) if row else None
 
+def reset_database(clear_credentials: bool = False):
+    """
+    Safely and transactionally deletes all application data in strict dependency order,
+    resets auto-increment counters, and verifies referential integrity.
+    Preserves database schema and table definitions.
+    """
+    conn = get_db()
+    cleared_tables = [
+        "chat_messages",
+        "who_to_ask",
+        "open_loops",
+        "onboarding_tasks",
+        "handover_packages",
+        "decisions",
+        "interview_answers",
+        "interview_questions",
+        "graph_edges",
+        "contributions",
+        "artifacts",
+        "commits",
+        "ingestion_jobs",
+        "team_members",
+        "repositories",
+        "projects",
+        "connectors",
+    ]
+    if clear_credentials:
+        cleared_tables.append("github_credentials")
+
+    try:
+        with conn:
+            for table in cleared_tables:
+                conn.execute(f"DELETE FROM {table};")
+            conn.execute("DELETE FROM sqlite_sequence;")
+
+            # Verify referential integrity
+            fk_violations = conn.execute("PRAGMA foreign_key_check;").fetchall()
+            if fk_violations:
+                raise RuntimeError(f"Foreign key integrity violation during reset: {fk_violations}")
+        return {
+            "status": "success",
+            "message": "Database successfully reset to clean slate",
+            "cleared_tables": cleared_tables,
+            "sequences_reset": True,
+        }
+    finally:
+        conn.close()

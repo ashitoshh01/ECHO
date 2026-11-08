@@ -1,12 +1,14 @@
 """
 Echo Real Git Scanner Engine
-Scans any local Git repository (commits, authors, file touches, recency, doc coverage)
+Scans any local or cloned Git repository (commits, authors, file touches, recency, doc coverage)
 and computes real, deterministic risk scores and ownership concentration.
 """
 
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List
 from database import get_db
 
 def run_git(args, cwd=None):
@@ -19,7 +21,7 @@ def run_git(args, cwd=None):
             check=True
         )
         return res.stdout.strip()
-    except Exception as e:
+    except Exception:
         return None
 
 def recency_weight(days: int) -> float:
@@ -28,23 +30,79 @@ def recency_weight(days: int) -> float:
     if days <= 90: return 0.4
     return 0.15
 
-def scan_git_repository(repo_path: str = None, project_id: str = "proj-live", leaver_name: str = None):
-    # Default to the root repository path of the workspace
+def record_git_commits(repo_path: str, project_id: str, repo_id: str):
+    """Extracts commits and short stats from git log into the SQLite commits table."""
+    try:
+        log_output = subprocess.run(
+            ["git", "log", "-n", "100", "--format=@@@ECHO_COMMIT@@@%H%x1f%an%x1f%ae%x1f%ct%x1f%s", "--shortstat"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True
+        ).stdout
+    except Exception:
+        return
+
+    conn = get_db()
+    with conn:
+        conn.execute("DELETE FROM commits WHERE project_id = ?", (project_id,))
+
+        entries = [e.strip() for e in log_output.split("@@@ECHO_COMMIT@@@") if e.strip()]
+        for entry in entries:
+            lines = entry.splitlines()
+            if not lines:
+                continue
+            meta_line = lines[0]
+            parts = meta_line.split("\x1f")
+            if len(parts) >= 5:
+                sha, author, email, ts_str, msg = parts[0], parts[1], parts[2], parts[3], parts[4]
+                try:
+                    committed_at = datetime.fromtimestamp(int(ts_str), tz=timezone.utc).isoformat()
+                except Exception:
+                    committed_at = datetime.now(timezone.utc).isoformat()
+
+                files_changed = 0
+                m = re.search(r'(\d+)\s+file[s]?\s+changed', entry)
+                if m:
+                    files_changed = int(m.group(1))
+
+                conn.execute("""
+                    INSERT OR REPLACE INTO commits
+                    (id, project_id, repo_id, author_name, author_email, committed_at, message, files_changed_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (sha, project_id, repo_id, author, email, committed_at, msg, files_changed))
+    conn.close()
+
+def scan_git_repository(
+    repo_path: Optional[str] = None,
+    project_id: str = "proj-live",
+    leaver_name: Optional[str] = None,
+    repo_name: Optional[str] = None,
+    remote_url: Optional[str] = None,
+    branch: Optional[str] = None,
+    source_type: str = "git",
+    github_meta: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Scans a Git repository on disk, extracts authors, commits, file touches,
+    calculates doc coverage and criticality, and persists the analysis results.
+    """
+    # 1. Resolve repository path
     if not repo_path or repo_path in [".", "./"]:
-        # Find git root
         root = run_git(["rev-parse", "--show-toplevel"])
         repo_path = os.path.abspath(root if root else os.path.join(os.path.dirname(__file__), "..", ".."))
     else:
         repo_path = os.path.abspath(repo_path)
 
-    # 1. Verify git repo
+    # Verify git repo
     is_git = run_git(["rev-parse", "--is-inside-work-tree"], cwd=repo_path)
     if is_git != "true":
         raise ValueError(f"Directory {repo_path} is not a valid Git repository")
 
-    repo_name = os.path.basename(repo_path)
-    branch = run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_path) or "main"
-    remote_url = run_git(["config", "--get", "remote.origin.url"], cwd=repo_path) or repo_path
+    # Inferred metadata if not explicitly passed
+    resolved_repo_name = repo_name or os.path.basename(repo_path)
+    resolved_branch = branch or run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_path) or "main"
+    resolved_remote_url = remote_url or run_git(["config", "--get", "remote.origin.url"], cwd=repo_path) or repo_path
 
     now = datetime.now(timezone.utc).isoformat()
     now_ts = int(datetime.now(timezone.utc).timestamp())
@@ -63,7 +121,7 @@ def scan_git_repository(repo_path: str = None, project_id: str = "proj-live", le
         if not any(ign in f for ign in ignored_substrings)
     ]
 
-    # 3. Get all authors and commit counts from real git log
+    # 3. Get authors and commit counts from real git log
     shortlog = run_git(["shortlog", "-sn", "--no-merges", "HEAD"], cwd=repo_path) or ""
     authors = []
     for line in shortlog.splitlines():
@@ -93,22 +151,48 @@ def scan_git_repository(repo_path: str = None, project_id: str = "proj-live", le
         primary_leaver = leaver_name or authors[0]["name"]
         successor_name = authors[1]["name"] if len(authors) > 1 else "Successor"
 
+    # GitHub specific attributes
+    gh_owner = None
+    gh_id = None
+    gh_default_branch = resolved_branch
+    gh_desc = None
+    gh_is_private = 0
+    gh_html_url = resolved_remote_url
+    gh_size_kb = 0
+
+    if github_meta:
+        gh_owner = (github_meta.get("owner") or {}).get("login")
+        gh_id = github_meta.get("id")
+        gh_default_branch = github_meta.get("default_branch") or resolved_branch
+        gh_desc = github_meta.get("description")
+        gh_is_private = 1 if github_meta.get("private") else 0
+        gh_html_url = github_meta.get("html_url") or resolved_remote_url
+        gh_size_kb = github_meta.get("size_kb") or 0
+
+    project_title = f"{resolved_repo_name} — GitHub" if source_type == "github" else f"{resolved_repo_name} — Live Git Workspace"
+    project_desc = gh_desc or f"Scanned from {source_type} repository branch: {resolved_branch}"
+
     conn = get_db()
     with conn:
         # Create or update real project
         conn.execute("""
             INSERT OR REPLACE INTO projects (id, name, description, mode, is_active, created_at)
             VALUES (?, ?, ?, 'live', 1, ?)
-        """, (project_id, f"{repo_name} — Live Git Workspace", f"Scanned from real git repository branch: {branch}", now))
+        """, (project_id, project_title, project_desc, now))
 
         # Mark others inactive so live project is default active!
         conn.execute("UPDATE projects SET is_active = 0 WHERE id != ?", (project_id,))
 
         # Repository
         conn.execute("""
-            INSERT OR REPLACE INTO repositories (id, project_id, name, path_or_url, branch, source_type, status, last_synced_at)
-            VALUES (?, ?, ?, ?, ?, 'git', 'synced', ?)
-        """, (f"repo-{project_id}", project_id, repo_name, remote_url, branch, now))
+            INSERT OR REPLACE INTO repositories
+            (id, project_id, name, path_or_url, branch, source_type, status, last_synced_at,
+             owner, repo_id_github, default_branch, description, is_private, html_url, size_kb)
+            VALUES (?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            f"repo-{project_id}", project_id, resolved_repo_name, resolved_remote_url, resolved_branch,
+            source_type, now, gh_owner, gh_id, gh_default_branch, gh_desc, gh_is_private, gh_html_url, gh_size_kb
+        ))
 
         # Team members
         conn.execute("DELETE FROM team_members WHERE project_id = ?", (project_id,))
@@ -176,7 +260,7 @@ def scan_git_repository(repo_path: str = None, project_id: str = "proj-live", le
             conn.execute("""
                 INSERT INTO artifacts (id, project_id, repo_id, type, title, path, criticality, doc_coverage, days_since_touch, repo, is_planted_gap, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-            """, (art_id, project_id, f"repo-{project_id}", atype, title, fpath, criticality, doc_coverage, days_since, repo_name, now))
+            """, (art_id, project_id, f"repo-{project_id}", atype, title, fpath, criticality, doc_coverage, days_since, resolved_repo_name, now))
 
             # Store contributions
             for author_name, commit_cnt in file_authors.items():
@@ -192,7 +276,7 @@ def scan_git_repository(repo_path: str = None, project_id: str = "proj-live", le
 
             scanned_count += 1
 
-        # Handover Package for Live Project
+        # Handover Package for Project
         leaver_id = primary_leaver.lower().replace(" ", "_")
         succ_id = successor_name.lower().replace(" ", "_")
 
@@ -205,11 +289,11 @@ def scan_git_repository(repo_path: str = None, project_id: str = "proj-live", le
         # Dynamic onboarding tasks
         conn.execute("DELETE FROM onboarding_tasks WHERE package_id = ?", (pkg_id,))
         live_tasks = [
-            (pkg_id, 1, "1-2", f"Clone and setup {repo_name} development environment", "Initial code check", 0, 1),
+            (pkg_id, 1, "1-2", f"Clone and setup {resolved_repo_name} development environment", "Initial code check", 0, 1),
             (pkg_id, 1, "3-4", f"Review high-risk modules with sole authorship by {primary_leaver}", "Eliminate single points of failure", 0, 2),
             (pkg_id, 1, "5", f"Handover architecture walkthrough with {primary_leaver}", "Capture unwritten operational knowledge", 0, 3),
             (pkg_id, 2, "1-3", "Submit first test or bugfix pull request", "Verify test suites and build scripts", 0, 4),
-            (pkg_id, 2, "4-5", f"Assume primary ownership of {repo_name} releases", "Full handover sign-off", 0, 5),
+            (pkg_id, 2, "4-5", f"Assume primary ownership of {resolved_repo_name} releases", "Full handover sign-off", 0, 5),
         ]
         conn.executemany("""
             INSERT INTO onboarding_tasks (package_id, week, days, task, why, is_completed, order_index)
@@ -228,4 +312,14 @@ def scan_git_repository(repo_path: str = None, project_id: str = "proj-live", le
         """, live_contacts)
 
     conn.close()
-    return {"status": "scanned", "project_id": project_id, "artifacts_count": scanned_count, "authors": authors}
+
+    # Record commits in database
+    record_git_commits(repo_path, project_id, f"repo-{project_id}")
+
+    return {
+        "status": "scanned",
+        "project_id": project_id,
+        "repo_name": resolved_repo_name,
+        "artifacts_count": scanned_count,
+        "authors": authors
+    }

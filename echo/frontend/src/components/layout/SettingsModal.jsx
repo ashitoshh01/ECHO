@@ -108,6 +108,23 @@ export function SettingsModal({ isOpen, onClose, onScanLiveGit }) {
                         {scanning ? 'Scanning...' : 'Scan Now'}
                       </button>
                     )}
+
+                    {c.type === 'github' && isConn && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await echoApi.disconnectGitHub();
+                            const res = await echoApi.getConnectors();
+                            setConnectors(res.connectors || []);
+                          } catch (e) {
+                            setScanMsg(`Disconnect failed: ${e.message}`);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-medium hover:bg-rose-100 transition shrink-0"
+                      >
+                        Disconnect
+                      </button>
+                    )}
                   </div>
                 );
               })}

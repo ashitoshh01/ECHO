@@ -176,31 +176,37 @@ export default function Sidebar({
               </button>
             </div>
             <div className="space-y-1">
-              {projects.map((proj) => {
-                const isSelected = activeProject?.id === proj.id;
-                const isLive = proj.mode === 'live';
-                return (
-                  <button
-                    key={proj.id}
-                    onClick={() => onSelectProject && onSelectProject(proj.id)}
-                    className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-lg text-xs font-mono transition ${
-                      isSelected
-                        ? isLive
-                          ? 'bg-emerald-50/70 text-emerald-900 font-medium border border-emerald-200/80 shadow-2xs'
-                          : 'bg-purple-50/70 text-purple-900 font-medium border border-purple-200/80 shadow-2xs'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <FolderGit2 className={`w-3.5 h-3.5 ${isSelected ? (isLive ? 'text-emerald-600' : 'text-purple-600') : 'text-slate-400'}`} />
-                      <span className="truncate">{proj.name.split('—')[0].trim()}</span>
-                    </div>
-                    {isSelected && (
-                      <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-purple-600'} shrink-0`} title="Active Project" />
-                    )}
-                  </button>
-                );
-              })}
+              {projects.length === 0 ? (
+                <div className="p-3 text-center rounded-lg border border-dashed border-slate-200 text-slate-400 text-xs">
+                  No projects tracked
+                </div>
+              ) : (
+                projects.map((proj) => {
+                  const isSelected = activeProject?.id === proj.id;
+                  const isLive = proj.mode === 'live';
+                  return (
+                    <button
+                      key={proj.id}
+                      onClick={() => onSelectProject && onSelectProject(proj.id)}
+                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-lg text-xs font-mono transition ${
+                        isSelected
+                          ? isLive
+                            ? 'bg-emerald-50/70 text-emerald-900 font-medium border border-emerald-200/80 shadow-2xs'
+                            : 'bg-purple-50/70 text-purple-900 font-medium border border-purple-200/80 shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <FolderGit2 className={`w-3.5 h-3.5 ${isSelected ? (isLive ? 'text-emerald-600' : 'text-purple-600') : 'text-slate-400'}`} />
+                        <span className="truncate">{proj.name.split('—')[0].trim()}</span>
+                      </div>
+                      {isSelected && (
+                        <span className={`w-2 h-2 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-purple-600'} shrink-0`} title="Active Project" />
+                      )}
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -211,26 +217,26 @@ export default function Sidebar({
                 Leaver Context
               </span>
               <span className="text-[10px] text-slate-400">
-                {isLiveMode ? 'Git commit attribution' : 'Benchmark rubric'}
+                {isLiveMode ? 'Git commit attribution' : activeProject ? 'Benchmark rubric' : 'Clean state'}
               </span>
             </div>
             <div className="text-xs space-y-1.5 text-slate-600">
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Departing:</span>
                 <span className="font-medium text-slate-800">
-                  {leaver ? `${leaver.name} (${leaver.role?.split(' ')[0] || 'Lead'})` : 'Loading...'}
+                  {leaver ? `${leaver.name} (${leaver.role?.split(' ')[0] || 'Lead'})` : 'None'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Successor:</span>
                 <span className="font-medium text-slate-800">
-                  {successor ? `${successor.name} (${successor.role?.split(' ')[0] || 'Successor'})` : 'Loading...'}
+                  {successor ? `${successor.name} (${successor.role?.split(' ')[0] || 'Successor'})` : 'None'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500">Manager:</span>
                 <span className="font-medium text-slate-800">
-                  {manager ? `${manager.name} (${manager.role?.split(' ')[0] || 'EM'})` : 'Engineering Lead'}
+                  {manager ? `${manager.name} (${manager.role?.split(' ')[0] || 'EM'})` : 'None'}
                 </span>
               </div>
             </div>

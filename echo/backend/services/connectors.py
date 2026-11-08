@@ -13,11 +13,13 @@ from database import get_db
 
 def get_connectors_status():
     conn = get_db()
-    db_rows = conn.execute("SELECT * FROM connectors").fetchall()
+    cred_row = conn.execute("SELECT * FROM github_credentials WHERE id = 'default'").fetchone()
+    conn_rows = conn.execute("SELECT * FROM connectors").fetchall()
     conn.close()
 
+    conn_map = {r["id"]: dict(r) for r in conn_rows}
     now = datetime.now(timezone.utc).isoformat()
-    github_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    github_env_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
 
     results = []
     
@@ -32,13 +34,25 @@ def get_connectors_status():
     })
 
     # 2. GitHub REST API
-    if github_token:
-        # Check token validity
+    if cred_row:
+        user_info = f"@{cred_row['username']}" if cred_row.get("username") else "Connected user"
+        github_status = "connected"
+        github_details = f"Authenticated as {user_info} via {cred_row.get('auth_type', 'token').upper()}."
+        last_sync = cred_row.get("updated_at") or now
+    elif github_env_token:
         github_status = "connected"
         github_details = "Authenticated via GITHUB_TOKEN environment credential."
+        last_sync = now
     else:
-        github_status = "not_configured"
-        github_details = "GITHUB_TOKEN not detected in environment. Using local Git ingestion."
+        saved_conn = conn_map.get("conn-github")
+        if saved_conn and saved_conn.get("status") == "disconnected":
+            github_status = "disconnected"
+            github_details = saved_conn.get("details", "Disconnected by user.")
+            last_sync = saved_conn.get("last_sync_at")
+        else:
+            github_status = "not_configured"
+            github_details = "GitHub not connected. Connect via OAuth/Token to ingest remote repositories."
+            last_sync = None
 
     results.append({
         "id": "conn-github",
@@ -46,7 +60,7 @@ def get_connectors_status():
         "type": "github",
         "status": github_status,
         "details": github_details,
-        "last_sync_at": now if github_token else None
+        "last_sync_at": last_sync
     })
 
     # 3. Slack
@@ -82,4 +96,3 @@ def get_connectors_status():
     })
 
     return results
-

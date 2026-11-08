@@ -85,10 +85,11 @@ export default function Handover({ active, onNavigateToInterview, activeProject,
   const answeredLandmines = (data?.landmines || []).filter((l) => l.captured).length;
   const totalLandmines = data?.landmines?.length || 0;
   const isApproved = data?.status === 'approved';
+  const hasPackage = Boolean(data?.package_id);
 
   // Dynamic calculations
   const weeksArray = (data?.onboarding_path || []).map((t) => t.week);
-  const totalWeeks = weeksArray.length > 0 ? Math.max(...weeksArray) : 1;
+  const totalWeeks = weeksArray.length > 0 ? Math.max(...weeksArray) : 0;
   const tasksCount = data?.onboarding_path?.length || 0;
 
   const successorName = data?.successor?.name || 'Successor';
@@ -99,17 +100,23 @@ export default function Handover({ active, onNavigateToInterview, activeProject,
     <div className="space-y-6 fade-in">
       {/* Page Header */}
       <PageHeader
-        title={`Handover Package for ${successorName}`}
-        subtitle={`Successor package curated from ${leaverName}'s knowledge graph & exit interview · Reviewed by ${managerName}`}
-        badge={isApproved ? 'Approved by Manager' : 'Pending Manager Review'}
+        title={hasPackage ? `Handover Package for ${successorName}` : 'Handover Package'}
+        subtitle={
+          hasPackage
+            ? `Successor package curated from ${leaverName}'s knowledge graph & exit interview · Reviewed by ${managerName}`
+            : 'No handover package generated yet. Handover packages are automatically generated when a repository is ingested.'
+        }
+        badge={!hasPackage ? 'Not Generated' : isApproved ? 'Approved by Manager' : 'Pending Manager Review'}
         actions={
           <div className="flex items-center gap-2">
             {/* Real Approval Toggle Button */}
             <button
               onClick={handleToggleApproval}
-              disabled={approving || isApproved}
+              disabled={approving || isApproved || !hasPackage}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition shadow-xs ${
-                isApproved
+                !hasPackage
+                  ? 'bg-slate-50 text-slate-400 border-slate-200 cursor-not-allowed'
+                  : isApproved
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200 cursor-default'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
               }`}
@@ -118,7 +125,9 @@ export default function Handover({ active, onNavigateToInterview, activeProject,
                 className={`w-3.5 h-3.5 ${isApproved ? 'text-emerald-600' : 'text-slate-400'}`}
               />
               <span>
-                {isApproved
+                {!hasPackage
+                  ? 'No Package'
+                  : isApproved
                   ? `Signed off by ${managerName}`
                   : approving
                   ? 'Signing off...'
@@ -143,7 +152,7 @@ export default function Handover({ active, onNavigateToInterview, activeProject,
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Onboarding Path"
-          value={`${totalWeeks} Week${totalWeeks > 1 ? 's' : ''}`}
+          value={tasksCount > 0 ? `${totalWeeks} Week${totalWeeks > 1 ? 's' : ''}` : '0 Weeks'}
           subtext={`${tasksCount} structured milestone tasks`}
           icon={Calendar}
           accent="purple"
@@ -168,10 +177,10 @@ export default function Handover({ active, onNavigateToInterview, activeProject,
 
         <MetricCard
           label="Package Status"
-          value={isApproved ? 'Approved' : 'Pending'}
-          subtext={isApproved ? `Signed off by ${managerName}` : 'Awaiting EM sign-off'}
+          value={!hasPackage ? 'None' : isApproved ? 'Approved' : 'Pending'}
+          subtext={!hasPackage ? 'No package generated yet' : isApproved ? `Signed off by ${managerName}` : 'Awaiting EM sign-off'}
           icon={ShieldCheck}
-          accent={isApproved ? 'emerald' : 'amber'}
+          accent={!hasPackage ? 'slate' : isApproved ? 'emerald' : 'amber'}
         />
       </div>
 
@@ -235,15 +244,21 @@ export default function Handover({ active, onNavigateToInterview, activeProject,
               </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {(data?.landmines || []).map((l, idx) => (
-                <LandmineCard
-                  key={l.artifact_id}
-                  landmine={l}
-                  rank={idx + 1}
-                  onNavigateToInterview={onNavigateToInterview}
-                  leaverName={leaverName}
-                />
-              ))}
+              {(data?.landmines || []).length === 0 ? (
+                <div className="col-span-3 p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl bg-white">
+                  No high-risk landmines detected yet.
+                </div>
+              ) : (
+                (data?.landmines || []).map((l, idx) => (
+                  <LandmineCard
+                    key={l.artifact_id}
+                    landmine={l}
+                    rank={idx + 1}
+                    onNavigateToInterview={onNavigateToInterview}
+                    leaverName={leaverName}
+                  />
+                ))
+              )}
             </div>
           </section>
         )}

@@ -187,7 +187,9 @@ export default function ExitInterview({ onAnswerSubmitted, focusArtifactId, acti
       <div className="space-y-4">
         {filteredQuestions.length === 0 ? (
           <div className="p-8 text-center bg-white rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs">
-            No questions generated for this filter category.
+            {totalQuestions === 0
+              ? 'No exit interview questions generated yet. Questions will be generated once knowledge gaps are detected from ingested repository evidence.'
+              : 'No questions generated for this filter category.'}
           </div>
         ) : (
           filteredQuestions.map((q, idx) => (

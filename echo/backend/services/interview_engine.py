@@ -44,6 +44,8 @@ def classify_gap(artifact: dict, risk: dict) -> str:
     return None
 
 def sync_project_questions(project_id: str, limit: int = 6):
+    if not project_id:
+        return
     risk_data = calculate_project_risk(project_id)
     ranked = risk_data["artifacts"]
     
@@ -109,6 +111,8 @@ def tokenize(s: str, filter_stops: bool = True):
     return tokens
 
 def get_knowledge_entries(project_id: str):
+    if not project_id:
+        return []
     conn = get_db()
     # 1. Interview answers
     ans_rows = conn.execute("""

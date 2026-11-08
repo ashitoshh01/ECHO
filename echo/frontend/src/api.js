@@ -39,6 +39,27 @@ export const echoApi = {
   checkHealth: () => api('/api/health'),
   getConnectors: () => api('/api/connectors'),
 
+  // GitHub Integration
+  getGitHubStatus: () => api('/api/github/status'),
+  connectGitHub: (token, authType = 'token') => api('/api/github/connect', {
+    method: 'POST',
+    body: JSON.stringify({ token, auth_type: authType }),
+  }),
+  disconnectGitHub: () => api('/api/github/disconnect', { method: 'POST' }),
+  getGitHubRepositories: ({ search = '', visibility = null, sort = 'updated', page = 1, perPage = 30 } = {}) => {
+    const q = new URLSearchParams({ sort, page: String(page), per_page: String(perPage) });
+    if (search) q.set('search', search);
+    if (visibility) q.set('visibility', visibility);
+    return api(`/api/github/repositories?${q.toString()}`);
+  },
+  getGitHubRepository: (owner, repo) => api(`/api/github/repositories/${owner}/${repo}`),
+  getGitHubBranches: (owner, repo) => api(`/api/github/repositories/${owner}/${repo}/branches`),
+  ingestGitHubRepository: (payload) => api('/api/repositories/github/ingest', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  getIngestionStatus: (jobId) => api(`/api/repositories/github/ingest/${jobId}/status`),
+
   // Projects
   getProjects: () => api('/api/projects'),
   selectProject: (projectId) => api('/api/projects/select', {
@@ -100,7 +121,7 @@ export function getRiskColor(pct) {
       dot: 'bg-rose-500',
     };
   }
-  if (pct >= 30) {
+  if (pct >= 25) {
     return {
       bar: 'bg-amber-500',
       text: 'text-amber-600',

@@ -154,8 +154,10 @@ export default function RiskTable({
           <tbody className="divide-y divide-slate-100">
             {sortedArtifacts.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-slate-400">
-                  No artifacts match your search and filter criteria.
+                <td colSpan={7} className="py-12 text-center text-slate-400 text-xs">
+                  {artifacts.length === 0
+                    ? 'No artifacts tracked. Ingest a Git repository to begin tracking knowledge risks.'
+                    : 'No artifacts match your search and filter criteria.'}
                 </td>
               </tr>
             ) : (

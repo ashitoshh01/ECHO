@@ -67,23 +67,25 @@ export default function Topbar({
         </button>
 
         {/* Dynamic Mode Switcher Pill */}
-        <button
-          onClick={handleToggleMode}
-          className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition shadow-2xs ${
-            isLiveMode
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-              : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
-          }`}
-          title="Click to toggle between Live Git Ingestion and Benchmark Rubric Dataset"
-        >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isLiveMode ? 'bg-emerald-500 animate-pulse' : 'bg-purple-600'
+        {projects.length > 1 && (
+          <button
+            onClick={handleToggleMode}
+            className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition shadow-2xs ${
+              isLiveMode
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
             }`}
-          />
-          <span>{isLiveMode ? 'Live Git: ECHO' : 'Benchmark Rubric'}</span>
-          <ArrowRightLeft className="w-3 h-3 text-slate-400 ml-0.5" />
-        </button>
+            title="Click to toggle between Live Git Ingestion and Benchmark Rubric Dataset"
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isLiveMode ? 'bg-emerald-500 animate-pulse' : 'bg-purple-600'
+              }`}
+            />
+            <span>{isLiveMode ? 'Live Git: ECHO' : 'Benchmark Rubric'}</span>
+            <ArrowRightLeft className="w-3 h-3 text-slate-400 ml-0.5" />
+          </button>
+        )}
 
         {/* Breadcrumbs */}
         <nav className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
@@ -96,11 +98,15 @@ export default function Topbar({
               onChange={(e) => onSelectProject && onSelectProject(e.target.value)}
               className="appearance-none pl-6 pr-6 py-1 text-xs font-semibold rounded-md bg-slate-100/80 text-slate-800 border border-slate-200/80 cursor-pointer focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
             >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name.split('—')[0].trim()} ({p.mode === 'live' ? 'Live Git' : 'Demo'})
-                </option>
-              ))}
+              {projects.length === 0 ? (
+                <option value="">No projects</option>
+              ) : (
+                projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name.split('—')[0].trim()} ({p.mode === 'live' ? 'Live Git' : 'Demo'})
+                  </option>
+                ))
+              )}
             </select>
             <FolderGit2 className="w-3.5 h-3.5 text-slate-500 absolute left-1.5 pointer-events-none" />
           </div>

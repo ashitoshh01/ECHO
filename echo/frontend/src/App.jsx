@@ -25,18 +25,25 @@ export default function App() {
       setBackendStatus('online');
       if (healthRes.active_project) {
         setActiveProject(healthRes.active_project);
+      } else {
+        setActiveProject(null);
       }
 
       const pRes = await echoApi.getProjects();
-      if (pRes && pRes.projects) {
+      if (pRes && pRes.projects && pRes.projects.length > 0) {
         setProjects(pRes.projects);
         const active = pRes.projects.find((p) => p.is_active) || pRes.projects[0];
-        if (active) setActiveProject(active);
+        setActiveProject(active || null);
+      } else {
+        setProjects([]);
+        setActiveProject(null);
       }
 
       const mRes = await echoApi.getTeamMembers();
       if (mRes && mRes.team_members) {
         setTeamMembers(mRes.team_members);
+      } else {
+        setTeamMembers([]);
       }
     } catch (e) {
       setBackendStatus('offline');
@@ -77,12 +84,15 @@ export default function App() {
   };
 
   const handleResetDemo = async () => {
-    if (!window.confirm('Reset benchmark demo state? This resets submitted answers and decisions for a clean presentation run.')) {
+    if (!window.confirm('Reset database to clean slate? This completely removes all ingested repository data, artifacts, and generated records.')) {
       return;
     }
     setResetting(true);
     try {
       await echoApi.resetDemoState();
+      setActiveProject(null);
+      setProjects([]);
+      setTeamMembers([]);
       setHandoverKey((k) => k + 1);
       await loadProjectsAndTeam();
     } catch (e) {

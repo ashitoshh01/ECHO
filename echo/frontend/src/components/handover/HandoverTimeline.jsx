@@ -20,6 +20,14 @@ export default function HandoverTimeline({ onboardingPath = [], onTaskToggled })
     }
   };
 
+  if (onboardingPath.length === 0) {
+    return (
+      <div className="p-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl bg-white">
+        No onboarding tasks generated yet.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {onboardingPath.map((step, idx) => {
