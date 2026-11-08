@@ -27,6 +27,11 @@ from services.interview_engine import (
 from services.connectors import get_connectors_status
 from services.git_scanner import scan_git_repository
 from services import github_service as gh_svc
+from services.asi_service import (
+    get_asi_status,
+    query_asi1,
+    update_asi_env,
+)
 
 app = FastAPI(title="Echo — Knowledge-Risk Engine", version="0.3.0")
 
@@ -78,6 +83,11 @@ class AskIn(BaseModel):
     question: str
     asker: Optional[str] = None
     project_id: Optional[str] = None
+
+class AiConfigIn(BaseModel):
+    api_key: str
+    model: Optional[str] = "asi1"
+
 
 class ApproveHandoverIn(BaseModel):
     approved_by: Optional[str] = "Neha (Engineering Manager)"
@@ -652,8 +662,19 @@ def toggle_onboarding_task(task_id: int):
     return {"task_id": task_id, "is_completed": bool(new_state)}
 
 # ----------------------------------------------------------------------------
-# ASK ECHO (CONVERSATIONS & RETRIEVAL)
+# ASK ECHO (AI ASSISTANT & RETRIEVAL)
 # ----------------------------------------------------------------------------
+@app.get("/api/ai/status")
+def get_ai_status_endpoint():
+    return get_asi_status()
+
+@app.post("/api/ai/config")
+def update_ai_config_endpoint(payload: AiConfigIn):
+    success = update_asi_env(payload.api_key, payload.model)
+    if not success:
+        raise HTTPException(500, "Failed to update configuration in .env")
+    return get_asi_status()
+
 @app.get("/api/conversations")
 def get_conversations(project_id: Optional[str] = None):
     p_id = project_id or (get_active_project() or {}).get("id")
@@ -672,6 +693,7 @@ def get_conversations(project_id: Optional[str] = None):
         if r["citations_json"]:
             try: cit = json.loads(r["citations_json"])
             except: pass
+        col_names = r.keys()
         messages.append({
             "id": r["id"],
             "role": r["role"],
@@ -681,16 +703,18 @@ def get_conversations(project_id: Optional[str] = None):
             "suggested_contact": r["suggested_contact"],
             "stale_warning": bool(r["stale_warning"]),
             "citations": cit,
+            "ai_provider": r["ai_provider"] if "ai_provider" in col_names else "asi1",
+            "ai_model": r["ai_model"] if "ai_model" in col_names else "asi1",
             "created_at": r["created_at"],
         })
     return {"messages": messages}
 
 @app.post("/api/ask")
-def ask_echo_endpoint(payload: AskIn):
+async def ask_echo_endpoint(payload: AskIn):
     p_id = payload.project_id or (get_active_project() or {}).get("id")
     if not p_id:
         raise HTTPException(400, "No active project. Please ingest a repository first.")
-    hits = retrieve_answers(payload.question, p_id)
+
     now = datetime.now(timezone.utc).isoformat()
     import json
 
@@ -703,50 +727,53 @@ def ask_echo_endpoint(payload: AskIn):
             VALUES (?, 'user', ?, ?)
         """, (p_id, payload.question.strip(), now))
 
-    if not hits:
-        # Dynamic honesty fallback
-        w_row = conn.execute("SELECT contact FROM who_to_ask WHERE package_id = (SELECT id FROM handover_packages WHERE project_id = ?) LIMIT 1", (p_id,)).fetchone()
-        suggested = w_row["contact"] if w_row else "Priya"
-        fallback_msg = f"I don't have verified evidence for that. I'd ask {suggested} — platform engineer familiar with this subsystem."
+    # Fetch recent conversation turns
+    history_rows = conn.execute("""
+        SELECT role, text, answer, echo_says FROM chat_messages 
+        WHERE project_id = ? ORDER BY id DESC LIMIT 6
+    """, (p_id,)).fetchall()
+    conversation_history = [dict(h) for h in reversed(history_rows)]
 
-        with conn:
-            conn.execute("""
-                INSERT INTO chat_messages (project_id, role, text, answer, echo_says, suggested_contact, stale_warning, citations_json, created_at)
-                VALUES (?, 'echo', ?, NULL, ?, ?, 0, '[]', ?)
-            """, (p_id, fallback_msg, fallback_msg, suggested.lower().split()[0], now))
+    # Query ASI:One AI with full project context
+    result = await query_asi1(
+        question=payload.question,
+        project_id=p_id,
+        asker=payload.asker,
+        conversation_history=conversation_history
+    )
 
-        conn.close()
-        return {
-            "answer": None,
-            "echo_says": fallback_msg,
-            "suggested_contact": suggested.lower().split()[0],
-            "citations": []
-        }
+    content = result.get("answer") or result.get("echo_says") or ""
+    answer = result.get("answer")
+    echo_says = result.get("echo_says")
+    citations = result.get("citations") or []
+    suggested_contact = result.get("suggested_contact")
+    stale_warning = 1 if result.get("stale_warning") else 0
+    ai_provider = result.get("ai_provider", "asi1")
+    ai_model = result.get("ai_model", "asi1")
 
-    primary = hits[0]
-    answer = primary["text"]
-    if primary.get("person") and primary["kind"] == "interview_answer":
-        answer = f"{answer} (captured from {primary['person']}'s exit interview)"
-
-    citations = [
-        {"source": h["source"], "artifact_id": h["artifact_id"], "kind": h["kind"]}
-        for h in hits
-    ]
-    stale_warning = any(h["artifact_id"] == "DOC-RUNBOOK" for h in hits)
-
+    # Save Echo response
     with conn:
         conn.execute("""
-            INSERT INTO chat_messages (project_id, role, text, answer, echo_says, suggested_contact, stale_warning, citations_json, created_at)
-            VALUES (?, 'echo', ?, ?, ?, NULL, ?, ?, ?)
-        """, (p_id, answer, answer, answer, 1 if stale_warning else 0, json.dumps(citations), now))
+            INSERT INTO chat_messages (
+                project_id, role, text, answer, echo_says, suggested_contact,
+                stale_warning, citations_json, ai_provider, ai_model, created_at
+            )
+            VALUES (?, 'echo', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            p_id,
+            content,
+            answer,
+            echo_says,
+            suggested_contact,
+            stale_warning,
+            json.dumps(citations),
+            ai_provider,
+            ai_model,
+            datetime.now(timezone.utc).isoformat()
+        ))
 
     conn.close()
-    return {
-        "answer": answer,
-        "citations": citations,
-        "stale_warning": stale_warning,
-        "disclaimer": "Retrieval-first: answers come only from stored evidence.",
-    }
+    return result
 
 # ----------------------------------------------------------------------------
 # CONNECTORS & RESET

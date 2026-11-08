@@ -1,4 +1,15 @@
+# Python
 __pycache__/
-*.pyc
+*/__pycache__/
+*.py[cod]
 *.pyo
+*.pyd
 .venv/
+venv/
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example

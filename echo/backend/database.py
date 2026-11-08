@@ -258,6 +258,15 @@ def init_db():
             if col not in repo_cols:
                 conn.execute(f"ALTER TABLE repositories ADD COLUMN {col} {col_type};")
 
+        chat_cols = [r["name"] for r in conn.execute("PRAGMA table_info(chat_messages)").fetchall()]
+        needed_chat_cols = {
+            "ai_provider": "TEXT DEFAULT 'asi1'",
+            "ai_model": "TEXT DEFAULT 'asi1'"
+        }
+        for col, col_type in needed_chat_cols.items():
+            if col not in chat_cols:
+                conn.execute(f"ALTER TABLE chat_messages ADD COLUMN {col} {col_type};")
+
     conn.close()
 
 def get_active_project():

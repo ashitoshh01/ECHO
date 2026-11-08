@@ -99,7 +99,12 @@ export const echoApi = {
     method: 'POST',
   }),
 
-  // Ask Echo
+  // Ask Echo & ASI:One AI
+  getAiStatus: () => api('/api/ai/status'),
+  updateAiConfig: (apiKey, model = 'asi1') => api('/api/ai/config', {
+    method: 'POST',
+    body: JSON.stringify({ api_key: apiKey, model }),
+  }),
   getConversations: (projectId = null) => api(`/api/conversations${projectId ? `?project_id=${projectId}` : ''}`),
   askEcho: (question, asker = null, projectId = null) => api('/api/ask', {
     method: 'POST',
