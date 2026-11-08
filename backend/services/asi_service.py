@@ -23,7 +23,7 @@ from services.interview_engine import retrieve_answers, tokenize
 logger = logging.getLogger("echo.asi1")
 
 def load_project_env():
-    """Dynamically loads .env from project root or backend directory."""
+    """Dynamically loads .env from project root or backend directory without clobbering system env vars."""
     here = Path(__file__).resolve().parent
     candidates = [
         here.parent / ".env",                    # backend/.env
@@ -32,7 +32,7 @@ def load_project_env():
     ]
     for p in candidates:
         if p.is_file():
-            load_dotenv(dotenv_path=p, override=True)
+            load_dotenv(dotenv_path=p, override=False)
             return str(p)
     return None
 
@@ -70,9 +70,16 @@ def get_asi_status() -> Dict[str, Any]:
     }
 
 def update_asi_env(api_key: str, model: Optional[str] = None) -> bool:
-    """Updates the .env file with a new API key and optional model."""
+    """Updates runtime environment and attempts to persist to .env file."""
+    cleaned_key = api_key.strip()
+    chosen_model = (model or os.getenv("ASI1_MODEL", "asi1")).strip()
+
+    # Always update process environment so changes are active immediately
+    os.environ["ASI1_API_KEY"] = cleaned_key
+    os.environ["ASI1_MODEL"] = chosen_model
+
     root_env = Path(__file__).resolve().parent.parent.parent / ".env"
-    model = model or os.getenv("ASI1_MODEL", "asi1")
+    backend_env = Path(__file__).resolve().parent.parent / ".env"
 
     content = f"""# ============================================================================
 # ECHO KNOWLEDGE-RISK ENGINE — ENVIRONMENT CONFIGURATION
@@ -81,28 +88,27 @@ def update_asi_env(api_key: str, model: Optional[str] = None) -> bool:
 # ASI:One (ASI1) API Key
 # Generated or retrieved from: https://asi1.ai/dashboard/api-keys
 #
-ASI1_API_KEY={api_key.strip()}
+ASI1_API_KEY={cleaned_key}
 
 # Model to use: 'asi1' (recommended default), 'asi1-mini', or 'asi1-ultra'
-ASI1_MODEL={model.strip()}
+ASI1_MODEL={chosen_model}
 
 # ASI:One API Base URL
 ASI1_BASE_URL=https://api.asi1.ai/v1
 """
     try:
-        root_env.write_text(content)
-        # Also touch backend .env if it is not a symlink
-        backend_env = Path(__file__).resolve().parent.parent / ".env"
-        if not backend_env.is_symlink():
+        if root_env.parent.exists():
+            root_env.write_text(content)
+        if backend_env.parent.exists() and not backend_env.is_symlink():
             try:
                 backend_env.write_text(content)
             except Exception:
                 pass
         load_project_env()
-        return True
     except Exception as e:
-        logger.error(f"Failed to write .env: {e}")
-        return False
+        logger.warning(f"Could not persist .env file to disk (normal in containerized production): {e}")
+
+    return True
 
 def build_project_context(project_id: str, question: str = "") -> Dict[str, Any]:
     """

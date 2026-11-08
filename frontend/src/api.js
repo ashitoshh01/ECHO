@@ -1,23 +1,65 @@
 /**
  * Echo Centralized API Client & Service Layer
- * Fully dynamic: connects to FastAPI backend on port 8000 (direct or via Vite proxy)
+ * Supports production deployments (Render backend + Vercel frontend)
+ * and local development seamlessly.
  */
 
-const API_BASE = (typeof window !== 'undefined' && window.location.port === '8000')
-  ? ''
-  : (typeof window !== 'undefined' && (window.location.port === '3000' || window.location.port === '5173'))
-    ? '' // Vite proxy forwards /api to http://127.0.0.1:8000
-    : `http://${(typeof window !== 'undefined' && window.location.hostname) || 'localhost'}:8000`;
+// Determine the backend base URL dynamically:
+// 1. Production: import.meta.env.VITE_API_URL configured on Vercel
+// 2. Dev server proxy: relative '' when running on dev ports (3000/5173) or backend port (8000)
+// 3. Fallback: localhost:8000
+export function resolveApiBase() {
+  const envUrl = import.meta.env?.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const port = window.location.port;
+    if (port === '8000' || port === '3000' || port === '5173') {
+      return ''; // Vite proxy forwards /api to backend, or direct static serving
+    }
+    const hostname = window.location.hostname || 'localhost';
+    return `http://${hostname}:8000`;
+  }
+
+  return 'http://localhost:8000';
+}
+
+export const API_BASE = resolveApiBase();
 
 export async function api(path, options = {}) {
-  const url = `${API_BASE}${path}`;
-  const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+  let url;
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    url = path;
+  } else {
+    const cleanBase = API_BASE ? API_BASE.replace(/\/+$/, '') : '';
+    const cleanPath = path ? (path.startsWith('/') ? path : `/${path}`) : '';
+    url = `${cleanBase}${cleanPath}`;
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+
+  // Do not set Content-Type for FormData payloads (browser sets boundary automatically)
+  if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+    delete headers['Content-Type'];
+  }
+
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+    });
+  } catch (networkErr) {
+    const detail = networkErr?.message || 'Network request failed';
+    throw new Error(
+      `Cannot reach ECHO backend at ${url} (${detail}). If the Render instance is waking from sleep, please wait 30-60 seconds and retry.`
+    );
+  }
 
   if (!response.ok) {
     let errorDetail = response.statusText;
@@ -30,7 +72,16 @@ export async function api(path, options = {}) {
     throw new Error(errorDetail || `Request failed with status ${response.status}`);
   }
 
-  return response.json();
+  if (response.status === 204) {
+    return null;
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+
+  return response.text();
 }
 
 // Service Methods

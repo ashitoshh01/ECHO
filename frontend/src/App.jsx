@@ -6,8 +6,22 @@ import Handover from './components/handover/Handover';
 import AskEcho from './components/ask/AskEcho';
 import { echoApi } from './api';
 
+function getTabFromPath(pathname) {
+  const clean = (pathname || '').toLowerCase().replace(/^\/+|\/+$/g, '');
+  if (clean === 'interview') return 'interview';
+  if (clean === 'handover') return 'handover';
+  if (clean === 'ask' || clean === 'chat' || clean === 'ai') return 'ask';
+  if (clean === 'risk' || clean === 'dashboard' || clean === '') return 'risk';
+  return 'risk';
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('risk');
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return getTabFromPath(window.location.pathname);
+    }
+    return 'risk';
+  });
   const [focusArtifactId, setFocusArtifactId] = useState(null);
   const [handoverKey, setHandoverKey] = useState(0);
   const [resetting, setResetting] = useState(false);
@@ -17,6 +31,26 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState(null);
   const [teamMembers, setTeamMembers] = useState([]);
+
+  // Sync route changes with browser history and popstate
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+    if (tab !== 'interview') setFocusArtifactId(null);
+    if (typeof window !== 'undefined') {
+      const targetPath = tab === 'risk' ? '/' : `/${tab}`;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({ tab }, '', targetPath);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(getTabFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Fetch projects and active project state
   const loadProjectsAndTeam = useCallback(async () => {
@@ -80,7 +114,7 @@ export default function App() {
 
   const handleNavigateToInterview = (artifactId) => {
     setFocusArtifactId(artifactId);
-    setActiveTab('interview');
+    handleTabChange('interview');
   };
 
   const handleResetDemo = async () => {
@@ -110,10 +144,7 @@ export default function App() {
   return (
     <AppShell
       activeTab={activeTab}
-      onSelectTab={(tab) => {
-        setActiveTab(tab);
-        if (tab !== 'interview') setFocusArtifactId(null);
-      }}
+      onSelectTab={handleTabChange}
       onResetDemo={handleResetDemo}
       resetting={resetting}
       backendStatus={backendStatus}

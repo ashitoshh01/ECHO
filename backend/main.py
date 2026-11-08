@@ -35,9 +35,42 @@ from services.asi_service import (
 
 app = FastAPI(title="Echo — Knowledge-Risk Engine", version="0.3.0")
 
+def get_allowed_origins() -> List[str]:
+    """
+    Computes list of allowed origins for CORS.
+    Supports localhost development, custom production domains, and Vercel domains.
+    Environment variables:
+    - FRONTEND_URL: e.g. "https://my-echo-app.vercel.app"
+    - ALLOWED_ORIGINS / CORS_ORIGINS: comma-separated list of origins
+    """
+    origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+    ]
+    env_origins_str = (
+        os.getenv("ALLOWED_ORIGINS")
+        or os.getenv("CORS_ORIGINS")
+        or os.getenv("FRONTEND_URL")
+        or ""
+    )
+    if env_origins_str:
+        for orig in env_origins_str.split(","):
+            cleaned = orig.strip().rstrip("/")
+            if cleaned and cleaned not in origins:
+                origins.append(cleaned)
+    return origins
+
+allowed_origins = get_allowed_origins()
+cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", r"^https://.*\.vercel\.app$")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,6 +82,16 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_event():
     init_db()
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT COUNT(*) as c FROM projects").fetchone()
+        if not row or row["c"] == 0:
+            seed_demo_data(reset=False)
+            sync_project_questions(DEMO_PROJECT_ID)
+    except Exception:
+        pass
+    finally:
+        conn.close()
 
 # ----------------------------------------------------------------------------
 # REQUEST MODELS
@@ -96,6 +139,14 @@ class ApproveHandoverIn(BaseModel):
 # ----------------------------------------------------------------------------
 # CORE / HEALTH & PROJECTS
 # ----------------------------------------------------------------------------
+@app.get("/health")
+def health_check():
+    """
+    Minimal health check endpoint for Render service uptime monitoring.
+    Never exposes internal filesystem paths, secrets, or configuration.
+    """
+    return {"status": "ok"}
+
 @app.get("/api/health")
 def health():
     active = get_active_project()
