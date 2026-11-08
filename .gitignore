@@ -39,7 +39,7 @@ wheels/
 # Frontend / Node
 node_modules/
 dist/
-echo/frontend/dist/
+frontend/dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -7,18 +7,15 @@
 
 ```bash
 # 1. Backend
-mkdir -p echo/backend echo/frontend
-#   save main.py + requirements.txt from the "Echo Backend Prototype" artifact into echo/backend/
-cd echo/backend
+cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 #   -> API docs: http://localhost:8000/docs
 
 # 2. Frontend
-#   save index.html from the "Echo Frontend Prototype" artifact into echo/frontend/
 cd ../frontend
-python -m http.server 3000
-#   -> open http://localhost:3000   (NOT file:// — CORS will block it)
+npm run dev
+#   -> open http://localhost:3000
 ```
 
 **Backup during the demo:** keep `http://localhost:8000/docs` open in a second browser tab — if the UI ever hiccups you can demo every endpoint straight from Swagger. Before the judges arrive, click "Reset demo" in the Exit Interview tab so answers start empty.

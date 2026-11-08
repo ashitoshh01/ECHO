@@ -17,7 +17,7 @@ Or run them individually in two separate terminals:
 
 ### 1. Backend (FastAPI)
 ```bash
-cd echo/backend
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -28,7 +28,7 @@ uvicorn main:app --reload --port 8000
 
 ### 2. Frontend (React 19 + Vite + Tailwind CSS + Lucide)
 ```bash
-cd echo/frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -40,16 +40,19 @@ npm run dev
 ## 📁 Project Structure
 
 ```
-wecode/
-├── echo/
-│   ├── backend/
-│   │   ├── main.py            # FastAPI backend with deterministic risk scoring & retrieval
-│   │   ├── requirements.txt   # FastAPI, Uvicorn, Pydantic
-│   │   └── .venv/             # Python virtual environment
-│   └── frontend/
-│       └── index.html         # Single-page React 18 + Tailwind UI
-├── run.sh                     # Automated startup script for both services
-├── README.md                  # This file
+ECHO/
+├── backend/
+│   ├── main.py            # FastAPI backend with deterministic risk scoring & retrieval
+│   ├── requirements.txt   # FastAPI, Uvicorn, Pydantic
+│   └── .venv/             # Python virtual environment
+├── frontend/
+│   ├── package.json       # Vite + React 19 dependencies
+│   ├── vite.config.js     # Vite dev server & proxy
+│   └── src/               # React application components
+├── .env                   # Environment secrets & API keys
+├── .env.example           # Example environment variables template
+├── run.sh                 # Automated startup script for both services
+├── README.md              # This file
 ├── Echo Backend Prototype.md  # Backend specification & code
 ├── Echo Frontend Prototype.md # Frontend specification & code
 └── Echo Demo & Presentation Guide.md # 2-minute judge pitch & rubric guide

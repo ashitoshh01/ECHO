@@ -1,8 +1,8 @@
 # Echo Frontend (React + Tailwind) — Working Prototype
 
-A single-file frontend that consumes the Echo FastAPI backend. No build step needed — just one `index.html` using CDN React + Tailwind. Save it in `echo/frontend/index.html`, start the backend (`uvicorn main:app --port 8000`), then open the file in a browser (or serve it: `python -m http.server 3000` → http://localhost:3000).
+A single-file frontend that consumes the Echo FastAPI backend. No build step needed — just one `index.html` using CDN React + Tailwind. Save it in `frontend/index.html`, start the backend (`uvicorn main:app --port 8000`), then open the file in a browser (or serve it: `python -m http.server 3000` → http://localhost:3000).
 
-> ⚠️ Because of browser CORS on `file://`, the easiest zero-setup path is: `cd echo/frontend && python -m http.server 3000` and open http://localhost:3000. The backend already allows origin `*`.
+> ⚠️ Because of browser CORS on `file://`, the easiest zero-setup path is: `cd frontend && python -m http.server 3000` and open http://localhost:3000. The backend already allows origin `*`.
 
 ## index.html
 

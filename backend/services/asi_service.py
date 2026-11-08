@@ -26,8 +26,8 @@ def load_project_env():
     """Dynamically loads .env from project root or backend directory."""
     here = Path(__file__).resolve().parent
     candidates = [
-        here.parent / ".env",                    # echo/backend/.env
-        here.parent.parent.parent / ".env",      # /Users/ramgadade/Desktop/ECHO/.env
+        here.parent / ".env",                    # backend/.env
+        here.parent.parent / ".env",             # ECHO/.env (project root)
         Path.cwd() / ".env",
     ]
     for p in candidates:

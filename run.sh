@@ -7,22 +7,22 @@ cd "$DIR"
 echo "=== Starting Echo Prototype ==="
 
 # Check backend virtual environment
-if [ ! -d "echo/backend/.venv" ]; then
-    echo "Creating virtual environment in echo/backend/.venv..."
-    python3 -m venv echo/backend/.venv
+if [ ! -d "backend/.venv" ]; then
+    echo "Creating virtual environment in backend/.venv..."
+    python3 -m venv backend/.venv
     echo "Installing backend dependencies..."
-    echo/backend/.venv/bin/pip install -r echo/backend/requirements.txt
+    backend/.venv/bin/pip install -r backend/requirements.txt
 fi
 
 # Check frontend dependencies and build
-if [ -f "echo/frontend/package.json" ]; then
-    if [ ! -d "echo/frontend/node_modules" ]; then
+if [ -f "frontend/package.json" ]; then
+    if [ ! -d "frontend/node_modules" ]; then
         echo "Installing frontend dependencies..."
-        (cd echo/frontend && npm install)
+        (cd frontend && npm install)
     fi
-    if [ ! -d "echo/frontend/dist" ]; then
+    if [ ! -d "frontend/dist" ]; then
         echo "Building frontend production bundle..."
-        (cd echo/frontend && npm run build)
+        (cd frontend && npm run build)
     fi
 fi
 
@@ -33,15 +33,15 @@ echo "Starting Frontend on http://localhost:3000 ..."
 trap 'kill $(jobs -p) 2>/dev/null' EXIT
 
 # Start backend
-(cd echo/backend && .venv/bin/uvicorn main:app --reload --port 8000) &
+(cd backend && .venv/bin/uvicorn main:app --reload --port 8000) &
 
 # Start frontend (Vite dev server with hot-reload and API proxy)
-if command -v npm >/dev/null 2>&1 && [ -f "echo/frontend/package.json" ]; then
-    (cd echo/frontend && npm run dev -- --port 3000 --host) &
-elif [ -d "echo/frontend/dist" ]; then
-    (cd echo/frontend/dist && python3 -m http.server 3000) &
+if command -v npm >/dev/null 2>&1 && [ -f "frontend/package.json" ]; then
+    (cd frontend && npm run dev -- --port 3000 --host) &
+elif [ -d "frontend/dist" ]; then
+    (cd frontend/dist && python3 -m http.server 3000) &
 else
-    (cd echo/frontend && python3 -m http.server 3000) &
+    (cd frontend && python3 -m http.server 3000) &
 fi
 
 echo "=================================================="

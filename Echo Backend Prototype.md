@@ -1,6 +1,6 @@
 # Echo Backend (FastAPI) — Working Prototype
 
-Below are the two files for the Echo backend prototype. Create a folder `echo/backend/`, save both files, then run:
+Below are the two files for the Echo backend prototype. Create a folder `backend/`, save both files, then run:
 
 ```bash
 pip install -r requirements.txt
