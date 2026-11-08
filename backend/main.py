@@ -50,6 +50,7 @@ def get_allowed_origins() -> List[str]:
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8000",
+        "https://echo-wecodecoders.vercel.app",
     ]
     env_origins_str = (
         os.getenv("ALLOWED_ORIGINS")
